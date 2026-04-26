@@ -60,7 +60,7 @@ const CONFIG = {
             dalle3: {
                 getEndpoint: (id) => {
                     const sid = document.getElementById('station-select').value;
-                    if (sid.startsWith('bc_openai') || sid.startsWith('bc_anthropic') || id.startsWith('gpt-image-2')) return '/chat/completions';
+                    if (sid.startsWith('bc_openai') || sid.startsWith('bc_anthropic') || sid === 'pinova' || id.startsWith('gpt-image-2')) return '/chat/completions';
                     return '/images/generations';
                 },
                 buildPayload: (i) => {
