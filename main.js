@@ -76,7 +76,7 @@ const CONFIG = {
                         p.prompt = i.prompt; p.n = 1;
                     }
                     if (i.size !== 'auto') p.size = i.size;
-                    if (i.format !== 'png') p.format = i.format;
+                    p.format = i.format; // 始终传 format，PNG 也明确写入
                     return p;
                 },
                 parseResponse: (d, i) => {
