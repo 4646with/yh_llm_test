@@ -39,13 +39,20 @@
                             <option value="bc_gemini">Burncloud (Gemini 规范)</option>
                             <option value="pinova">Pinova (OpenAI 规范)</option>
                             <option value="pinova_gemini">Pinova (Gemini 原生)</option>
+                            <option value="custom">自定义站点 (Custom)</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Base URL</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Base URL / 官网地址</label>
                         <input type="text" id="base-url"
-                            class="w-full bg-gray-100 border-gray-300 text-gray-500 rounded-md shadow-sm p-2 border font-mono text-sm"
+                            class="w-full bg-gray-100 border-gray-300 text-gray-500 rounded-md shadow-sm p-2 border font-mono text-sm transition-colors"
                             readonly>
+                    </div>
+                    <div id="custom-endpoint-container" class="hidden">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">API 路径 (Endpoint)</label>
+                        <input type="text" id="custom-endpoint"
+                            class="w-full bg-white border-gray-300 rounded-md shadow-sm p-2 border font-mono text-sm"
+                            value="/v1/chat/completions">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1">API Key</label>
@@ -211,8 +218,8 @@
         </div>
     </div>
 
-    <!-- 引入分离出的 JS 文件 -->
-    <script src="main.js"></script>
+    <!-- 引入分离出的 JS 文件 (防缓存) -->
+    <script src="main.js?v=2"></script>
 </body>
 
 </html>

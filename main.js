@@ -4,13 +4,15 @@ const CONFIG = {
         bc_anthropic: { text: { base: 'https://csp.burncloud.com/v1', adapter: 'anthropic', defaultModel: 'claude-3-haiku-20240307' }, image: { base: 'https://csp.burncloud.com/v1', adapter: 'dalle3', defaultModel: 'dall-e-3' } },
         bc_gemini: { text: { base: 'https://csp.burncloud.com', adapter: 'gemini', defaultModel: 'gemini-2.0-flash-001' }, image: { base: 'https://csp.burncloud.com', adapter: 'gemini_image', defaultModel: 'gemini-2.0-flash-001' } },
         pinova: { text: { base: 'https://pinova.ai/v1', adapter: 'openai', defaultModel: 'gpt-3.5-turbo' }, image: { base: 'https://pinova.ai/v1', adapter: 'dalle3', defaultModel: 'gpt-image-2' } },
-        pinova_gemini: { text: { base: 'https://pinova.ai', adapter: 'gemini', defaultModel: 'gemini-2.5-flash' }, image: { base: 'https://pinova.ai', adapter: 'gemini_image', defaultModel: 'gemini-2.5-flash-image' } }
+        pinova_gemini: { text: { base: 'https://pinova.ai', adapter: 'gemini', defaultModel: 'gemini-2.5-flash' }, image: { base: 'https://pinova.ai', adapter: 'gemini_image', defaultModel: 'gemini-2.5-flash-image' } },
+        custom: { text: { base: 'https://api.example.com', adapter: 'custom_text', defaultModel: 'gpt-3.5-turbo' }, image: { base: 'https://api.example.com', adapter: 'custom_image', defaultModel: 'gpt-image-2' } }
     },
     adapters: {
         text: {
             openai: { endpoint: '/chat/completions', buildPayload: (i) => ({ model: i.modelId, messages: [{ role: 'user', content: i.prompt }] }), parseResponse: (d) => d.choices?.[0]?.message?.content || JSON.stringify(d) },
             anthropic: { endpoint: '/messages', buildPayload: (i) => ({ model: i.modelId, max_tokens: 1024, messages: [{ role: 'user', content: i.prompt }] }), parseResponse: (d) => d.content?.[0]?.text || JSON.stringify(d) },
-            gemini: { getEndpoint: (id) => `/v1beta/models/${id}:generateContent`, buildPayload: (i) => ({ contents: [{ role: 'user', parts: [{ text: i.prompt }] }] }), parseResponse: (d) => d.candidates?.[0]?.content?.parts?.[0]?.text || JSON.stringify(d) }
+            gemini: { getEndpoint: (id) => `/v1beta/models/${id}:generateContent`, buildPayload: (i) => ({ contents: [{ role: 'user', parts: [{ text: i.prompt }] }] }), parseResponse: (d) => d.candidates?.[0]?.content?.parts?.[0]?.text || JSON.stringify(d) },
+            custom_text: { getEndpoint: () => { const v = document.getElementById('custom-endpoint').value.trim(); return v.startsWith('/') ? v : '/' + v; }, buildPayload: (i) => CONFIG.adapters.text.openai.buildPayload(i), parseResponse: (d) => CONFIG.adapters.text.openai.parseResponse(d) }
         },
         image: {
             gemini_image: {
@@ -58,6 +60,26 @@ const CONFIG = {
                     return m?.[1]?.length > 100 ? { status: 'success', url: `data:image/png;base64,${m[1]}` } : { status: 'error', msg: '未解析到图像数据' };
                 }
             },
+            custom_image: {
+                getEndpoint: () => { const v = document.getElementById('custom-endpoint').value.trim(); return v.startsWith('/') ? v : '/' + v; },
+                buildPayload: (i) => {
+                    const ep = CONFIG.adapters.image.custom_image.getEndpoint();
+                    const isChat = ep.includes('/chat/completions') || ep.includes('/messages');
+                    const p = { model: i.modelId };
+                    if (isChat) {
+                        const content = [{ type: 'text', text: i.prompt }];
+                        if (i.localImgData) content.push({ type: 'image_url', image_url: { url: `data:${i.localImgType || 'image/jpeg'};base64,${i.localImgData}` } });
+                        else if (i.refUrl) content.push({ type: 'image_url', image_url: { url: i.refUrl } });
+                        p.messages = [{ role: 'user', content: content }];
+                    } else {
+                        p.prompt = i.prompt; p.n = 1;
+                    }
+                    if (i.size !== 'auto') p.size = i.size;
+                    p.format = i.format;
+                    return p;
+                },
+                parseResponse: (d, i) => CONFIG.adapters.image.dalle3.parseResponse(d, i)
+            },
             dalle3: {
                 getEndpoint: (id) => {
                     const sid = document.getElementById('station-select').value;
@@ -98,6 +120,7 @@ let currentType = 'text', localImageBase64 = null, localImageType = null, localF
 
 const DOM = {
     station: document.getElementById('station-select'), base: document.getElementById('base-url'), key: document.getElementById('api-key'),
+    customEndpointContainer: document.getElementById('custom-endpoint-container'), customEndpoint: document.getElementById('custom-endpoint'),
     tabT: document.getElementById('tab-text'), tabI: document.getElementById('tab-image'),
     panelT: document.getElementById('panel-text'), panelI: document.getElementById('panel-image'),
     btnT: document.getElementById('btn-submit-text'), btnI: document.getElementById('btn-submit-image'),
@@ -217,9 +240,9 @@ function updateLog() {
     };
     const payload = adapter.buildPayload(inputs);
     const ep = adapter.getEndpoint ? adapter.getEndpoint(inputs.modelId) : adapter.endpoint;
-    let url = route.base.replace(/\/+$/, '');
+    let url = (sid === 'custom' ? DOM.base.value.trim() : route.base).replace(/\/+$/, '');
     ['/chat/completions', '/messages', '/images/generations'].forEach(e => { if (url.endsWith(e)) url = url.slice(0, -e.length); });
-    url = url.replace(/\/+$/, '') + ep;
+    url = url.replace(/\/+$/, '') + (ep.startsWith('/') ? ep : `/${ep}`);
     const headers = { 'Content-Type': 'application/json' };
     headers[route.adapter === 'anthropic' ? 'x-api-key' : 'Authorization'] = route.adapter === 'anthropic' ? '***' : 'Bearer ***';
     lastFullRequest = { url, method: 'POST', headers, body: payload };
@@ -295,9 +318,30 @@ DOM.dropArea.ondrop = (e) => { e.preventDefault(); DOM.dropArea.classList.remove
 DOM.fileInput.onchange = (e) => { if (e.target.files?.[0]) processFile(e.target.files[0]); };
 DOM.btnClearImg.onclick = () => { localImageBase64 = null; localFileRaw = null; DOM.fileInput.value = ''; DOM.imgPreview.src = ''; DOM.imgPreviewBox.classList.add('hidden'); DOM.btnClearImg.classList.add('hidden'); DOM.btnForceUpload.classList.add('hidden'); DOM.imageRefUrl.value = ''; DOM.fileLabel.innerText = '选择图片'; DOM.uploadStatus.classList.add('hidden'); updateLog(); };
 DOM.btnForceUpload.onclick = autoCloudUpload;
-DOM.station.onchange = () => { const r = CONFIG.stations[DOM.station.value][currentType]; DOM.base.value = r.base; document.getElementById(`${currentType}-model-id`).value = r.defaultModel; updateLog(); };
-['text-model-id', 'text-prompt', 'image-model-id', 'image-ref-url', 'image-prompt', 'image-size', 'image-format'].forEach(id => { document.getElementById(id).oninput = updateLog; });
-DOM.tabT.onclick = () => { currentType = 'text'; DOM.tabT.className = "flex-1 py-2 text-center border-b-2 border-blue-600 font-bold text-blue-600"; DOM.tabI.className = "flex-1 py-2 text-center border-b-2 border-transparent text-gray-400"; DOM.panelT.classList.remove('hidden'); DOM.panelI.classList.add('hidden'); DOM.station.dispatchEvent(new Event('change')); };
-DOM.tabI.onclick = () => { currentType = 'image'; DOM.tabI.className = "flex-1 py-2 text-center border-b-2 border-indigo-600 font-bold text-indigo-600"; DOM.tabT.className = "flex-1 py-2 text-center border-b-2 border-transparent text-gray-400"; DOM.panelI.classList.remove('hidden'); DOM.panelT.classList.add('hidden'); DOM.station.dispatchEvent(new Event('change')); };
+DOM.station.onchange = () => { 
+    const isCustom = DOM.station.value === 'custom';
+    if (isCustom) {
+        DOM.base.readOnly = false;
+        DOM.base.classList.remove('bg-gray-100', 'text-gray-500');
+        DOM.base.classList.add('bg-white', 'text-gray-800');
+        DOM.customEndpointContainer.classList.remove('hidden');
+        if (!DOM.base.value || DOM.base.value.includes('burncloud') || DOM.base.value.includes('pinova')) {
+            DOM.base.value = 'https://api.example.com';
+        }
+    } else {
+        DOM.base.readOnly = true;
+        DOM.base.classList.add('bg-gray-100', 'text-gray-500');
+        DOM.base.classList.remove('bg-white', 'text-gray-800');
+        DOM.customEndpointContainer.classList.add('hidden');
+        const r = CONFIG.stations[DOM.station.value][currentType]; 
+        DOM.base.value = r.base; 
+    }
+    const r = CONFIG.stations[DOM.station.value][currentType]; 
+    document.getElementById(`${currentType}-model-id`).value = r.defaultModel; 
+    updateLog(); 
+};
+['text-model-id', 'text-prompt', 'image-model-id', 'image-ref-url', 'image-prompt', 'image-size', 'image-format', 'base-url', 'custom-endpoint'].forEach(id => { document.getElementById(id).oninput = updateLog; });
+DOM.tabT.onclick = () => { currentType = 'text'; DOM.tabT.className = "flex-1 py-2 text-center border-b-2 border-blue-600 font-bold text-blue-600"; DOM.tabI.className = "flex-1 py-2 text-center border-b-2 border-transparent font-medium text-gray-500 transition-colors"; DOM.panelT.classList.remove('hidden'); DOM.panelI.classList.add('hidden'); DOM.station.dispatchEvent(new Event('change')); };
+DOM.tabI.onclick = () => { currentType = 'image'; DOM.tabI.className = "flex-1 py-2 text-center border-b-2 border-indigo-600 font-bold text-indigo-600"; DOM.tabT.className = "flex-1 py-2 text-center border-b-2 border-transparent font-medium text-gray-500 transition-colors"; DOM.panelI.classList.remove('hidden'); DOM.panelT.classList.add('hidden'); DOM.station.dispatchEvent(new Event('change')); };
 DOM.btnT.onclick = run; DOM.btnI.onclick = run;
 DOM.station.dispatchEvent(new Event('change'));
