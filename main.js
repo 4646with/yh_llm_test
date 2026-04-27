@@ -40,13 +40,14 @@ const CONFIG = {
                         });
                     }
 
-                    const p = { contents: [{ role: "user", parts: parts }], generationConfig: { imageConfig: {} } };
+                    // responseModalities 告知 API 返回图像
+                    const p = { contents: [{ role: "user", parts: parts }], generationConfig: { responseModalities: ["IMAGE"], imageConfig: {} } };
                     if (!isEdit && i.size !== 'auto') {
                         const map = { '1024x1024': ['1:1', '1K'], '2048x2048': ['1:1', '2K'], '3840x2160': ['16:9', '4K'] };
                         const [ratio, sz] = map[i.size] || ['1:1', '1K'];
                         p.generationConfig.imageConfig.aspectRatio = ratio; p.generationConfig.imageConfig.imageSize = sz;
                     }
-                    if (i.format !== 'png') p.generationConfig.imageConfig.outputMimeType = `image/${i.format}`;
+                    // Pinova 不使用 outputMimeType，用 aspectRatio/imageSize 控制输出
                     if (Object.keys(p.generationConfig.imageConfig).length === 0) delete p.generationConfig.imageConfig;
                     return p;
                 },
@@ -225,6 +226,24 @@ function updateLog() {
     DOM.logQ.value = JSON.stringify(truncateDeep(lastFullRequest), null, 2);
 }
 
+// 判断是否在 Vercel 等非 localhost 环境，自动切换代理模式
+const IS_PROXIED = !['localhost', '127.0.0.1'].includes(location.hostname);
+
+async function fetchWithProxy(url, headers, body, signal) {
+    if (IS_PROXIED) {
+        // Vercel 部署：走服务端代理，绕过 CORS
+        return fetch('/api/proxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ targetUrl: url, headers, body }),
+            signal
+        });
+    } else {
+        // 本地开发：直接请求 API
+        return fetch(url, { method: 'POST', headers, body: JSON.stringify(body), signal });
+    }
+}
+
 async function run() {
     const isT = currentType === 'text', btn = isT ? DOM.btnT : DOM.btnI, spin = document.getElementById(`spinner-${currentType}`);
     let disp; try { disp = JSON.parse(DOM.logQ.value); } catch (e) { return showToast('JSON 格式错误', 'error'); }
@@ -237,7 +256,7 @@ async function run() {
         const ak = CONFIG.stations[DOM.station.value][currentType].adapter;
         if (ak === 'anthropic' && config.headers['x-api-key'] === '***') config.headers['x-api-key'] = key;
         else if (config.headers['Authorization'] === 'Bearer ***') config.headers['Authorization'] = `Bearer ${key}`;
-        const res = await fetch(config.url, { method: 'POST', headers: config.headers, body: JSON.stringify(config.body), signal: ctrl.signal });
+        const res = await fetchWithProxy(config.url, config.headers, config.body, ctrl.signal);
         const dur = ((Date.now() - start) / 1000).toFixed(1);
         clearTimeout(tid);
         const ct = res.headers.get("content-type");
