@@ -1,0 +1,21 @@
+{
+  "name": "llm-test-panel",
+  "version": "1.0.0",
+  "description": "大模型接口测试面板",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "keywords": [
+    "llm",
+    "api",
+    "test",
+    "panel"
+  ],
+  "author": "",
+  "license": "MIT"
+}
