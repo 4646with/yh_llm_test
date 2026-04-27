@@ -1,0 +1,2 @@
+// This file is a placeholder - use proxy.js instead
+module.exports = { placeholder: true };
