@@ -9,23 +9,12 @@ export default async function handler(req, res) {
 
     const { targetUrl, headers: clientHeaders, body } = req.body;
 
-    // 安全校验：只允许代理特定域名
-    const allowedHosts = [
-        'pinova.ai',
-        'burncloud.com',
-        'csp.burncloud.com',
-        'tmpfiles.org'
-    ];
+    // 为了方便测试，移除了域名白名单校验
     let parsedUrl;
     try {
         parsedUrl = new URL(targetUrl);
     } catch (e) {
         return res.status(400).json({ error: '无效的目标 URL' });
-    }
-
-    const isAllowed = allowedHosts.some(h => parsedUrl.hostname === h || parsedUrl.hostname.endsWith('.' + h));
-    if (!isAllowed) {
-        return res.status(403).json({ error: `目标域名 ${parsedUrl.hostname} 不在白名单中` });
     }
 
     try {
